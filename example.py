@@ -20,7 +20,8 @@ def action2(value1, value2=5):
 # Define a command called "go" using default prompts
 @command("go")
 def action3(value1=False):
-    """Do another thing"""
+    """Do another thing
+    but do it well"""
     print "action3", repr(value1)
 
 # Define multiple commands that call the same function
@@ -32,3 +33,34 @@ def exit():
 
 commando = Commando()
 commando.cmdloop()
+# Some examples
+# (Cmd) doit
+# Enter a string: abc
+# Enter a number [5]: 6
+# action2 'abc' 6
+# (Cmd) doit def
+# Enter a number [5]: 
+# action2 'def' 5
+# (Cmd) doit abc ,,
+# action2 'abc' 5
+# (Cmd) doit ,,,
+# Enter a string: abc
+# action2 'abc' 5
+# (Cmd) go
+# Enter value1 Y/[N]: 
+# action3 False
+# (Cmd) go 
+# Enter value1 Y/[N]: Y
+# action3 True
+# (Cmd) go Y
+# action3 True
+# (Cmd) go N
+# action3 False
+# (Cmd) go True
+# action3 True
+# (Cmd) go False
+# action3 False
+# (Cmd) go No
+# action3 False
+# (Cmd) go Yes
+# action3 True

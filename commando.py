@@ -28,6 +28,7 @@ import sys
 import string
 import cmd
 import new
+import traceback
 
 class Commando(cmd.Cmd):
 
@@ -191,8 +192,13 @@ class command(object):
                         val = self.promptForValue(text, default, val_type)
                 vals.append(val)
 
+            if f_varargs != None and len(args) > len(f_args):
+                vals.extend(args[len(f_args):])
             # Call the function
-            f(*vals)
+            try:
+                f(*vals)
+            except Exception, e:
+                traceback.print_exc()
 
         # Inherit the provided docstring
         # and augment it with information about the arguments

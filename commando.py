@@ -29,105 +29,163 @@ import string
 import cmd
 import new
 import traceback
+import pprint
+import os
 
 class Commando(cmd.Cmd):
 
+    ISATTY = True
     def __init__(self, completekey='tab', stdin=sys.stdin, stdout=sys.stdout):
         cmd.Cmd.__init__(self, completekey, stdin, stdout)
+        Commando.ISATTY = os.isatty(stdin.fileno()) 
+        if not Commando.ISATTY: 
+            self.prompt = ""
+
+    def do_shell(self, argstr):
+        pass
+
+    def precmd(self, cmd):
+        if cmd == "EOF":
+            raise SystemExit
+        return cmd
+
+    def emptyline(self):
+        pass
+
+    def cmdloop(self, intro=None):
+        try:
+            cmd.Cmd.cmdloop(self, intro)
+        except KeyboardInterrupt:
+            pass
+        except SystemExit:
+            pass
+        print
+
+def parseargs(argstr):
+    """Args are separated by white-space or commas.  Unless a value is
+    surrounded by single quotes, white space will be trimmed.
+
+    >>> parseargs('A B C')
+    ('A', 'B', 'C')
+
+    >>> parseargs('A    B    C')
+    ('A', 'B', 'C')
+
+    >>> parseargs('A, B, C')
+    ('A', 'B', 'C')
+
+    >>> parseargs('A B, C')
+    ('A', 'B', 'C')
     
+    >>> parseargs('A,   B, C')
+    ('A', 'B', 'C')
+
+    >>> parseargs('A,   B   C')
+    ('A', 'B', 'C')
+
+    >>> parseargs('A ,, C')
+    ('A', None, 'C')
+
+    >>> parseargs("'A ' ' B ' C")
+    ('A ', ' B ', 'C')
+
+    >>> parseargs("'A, B, C'")
+    ('A, B, C',)
+
+    >>> parseargs("'A, B' C")
+    ('A, B', 'C')
+    """
+    args = []
+    def parser():
+        while True:
+            char = (yield)
+            if char != ' ': 
+                arg_accumulator = []
+                if char not in (',', "'", " "):
+                    arg_accumulator.append(char)
+                if char == "'":
+                    while True:
+                        char = (yield)
+                        if char == "'":
+                            break
+                        else:
+                            arg_accumulator.append(char)
+                while True:
+                    char = (yield)
+                    if char in (',', " ", None):
+                        arg = "".join(arg_accumulator)
+                        if arg == "":
+                            args.append(None)
+                        else:
+                            args.append(arg)
+                        break
+                    else:
+                        arg_accumulator.append(char)
+
+    p = parser()
+    p.send(None) # Start up the coroutine
+    for char in argstr:
+        p.send(char)
+    p.send(None)
+
+    return tuple(args)
+
 # DECORATOR
 class command(object):
-    def __init__(self, name, prompts=()):
+    def __init__(self, name, prompts=(), category=None):
         self.name = name
 	self.prompts = {}
         for argname, prompt, argtype in prompts:
             self.prompts[argname] = (prompt, argtype)
 
-    def parseargs(self, argstr):
-        """Args are separated by white-space or commas.  Unless a value is
-        surrounded by single or double-quotes, white space will be trimmed.
-
-        >>> parseargs('A B C')
-        ("A", "B", "C")
-
-        >>> parseargs('A, B, C')
-        ("A", "B", "C")
-
-        >>> parseargs('A ,, C')
-        ("A", None, "C")
-
-        >>> parseargs('"A " " B " C')
-        ("A ", " B ", "C")
-        """
-        args = []
-        def parser():
-            while True:
-                char = (yield)
-                if char != ' ': 
-                    arg_accumulator = []
-                    if char != ',':
-                        arg_accumulator.append(char)
-                    while True:
-                        char = (yield)
-                        if char in (',', " ", None):
-                            arg = "".join(arg_accumulator).strip()
-                            if arg == "":
-                                args.append(None)
-                            else:
-                                args.append(arg)
-                            break
-                        else:
-                            arg_accumulator.append(char)
-
-        p = parser()
-        p.send(None) # Start up the coroutine
-        for char in argstr:
-            p.send(char)
-        p.send(None)
-
-        return args 
-
     def promptForYesNo(self, prompt, default):
         val = None
-        while val == None:
-            if default == None:
-                input = raw_input(prompt + " Y/N: ")
-                if input.upper() in ("Y", "YES"):
-                    val = True
-                elif input.upper() in ("N", "NO"):
-                    val = False
-            else:
-                if default == True:
-                    val = raw_input(prompt + " [Y]/N: ")
-                elif default == False:
-                    val = raw_input(prompt + " Y/[N]: ")
+        if not Commando.ISATTY: 
+            val = default
+        else:
+            while val == None:
+                if default == None:
+                    input = raw_input(prompt + " Y/N: ")
+                    if input.upper() in ("Y", "YES"):
+                        val = True
+                    elif input.upper() in ("N", "NO"):
+                        val = False
                 else:
-                    raise ValueError
+                    if default == True:
+                        val = raw_input(prompt + " [Y]/N: ")
+                    elif default == False:
+                        val = raw_input(prompt + " Y/[N]: ")
+                    else:
+                        raise ValueError
 
-                if val.strip() == "":
-                    val = default
-                elif val.upper() in ("Y", "YES"):
-                    val = True
-                elif val.upper() in ("N", "NO"):
-                    val = False
+        if val.strip() == "":
+            val = default
+        elif val.upper() in ("Y", "YES"):
+            val = True
+        elif val.upper() in ("N", "NO"):
+            val = False
+
         return val
 
     def promptForValue(self, prompt, default, val_type):
         val = None
-        while val == None:
-            if default == None:
-                input = raw_input(prompt + ": ")
-                if input.strip() != "":
-                    val = input
-            else:
-                val = raw_input(prompt + " [%s]: " % (default))
-                if val.strip() == "":
-                    val = default
+        if not Commando.ISATTY: 
+            val = default
+        else:
+            while val == None:
+                if default == None:
+                    input = raw_input(prompt + ": ")
+                    if input.strip() != "":
+                        val = input
                 else:
-                    try:
-                        val = val_type(val)
-                    except ValueError:
-                        val = None
+                    val = raw_input(prompt + " [%s]: " % (default))
+                    if val.strip() == "":
+                        val = default
+        try:
+            val = val_type(val)
+        except ValueError:
+            val = None
+
         return val
 
     def __call__(self, f):
@@ -140,7 +198,7 @@ class command(object):
 
         # Define the wrapped function
         def wrapped_f(commando, argstr):
-	    args = self.parseargs(argstr)
+	    args = parseargs(argstr)
             vals = []
 
             for i in xrange(len(f_args)):
@@ -194,11 +252,18 @@ class command(object):
 
             if f_varargs != None and len(args) > len(f_args):
                 vals.extend(args[len(f_args):])
-            # Call the function
+            # Call the function and print the result using pprint
             try:
-                f(*vals)
+                result = f(*vals)
+                if result != None:
+                    if type(result) in (dict, list, tuple):
+                        pprint.pprint(result)
+                    else:
+                        print result
             except Exception, e:
                 traceback.print_exc()
+                if not Commando.ISATTY: 
+                    raise SystemExit
 
         # Inherit the provided docstring
         # and augment it with information about the arguments
@@ -211,3 +276,7 @@ class command(object):
 	# Don't return the wrapped function, because we want
 	# to be able to call the functions without the prompt logic
         return f
+
+if __name__ == "__main__":
+    import doctest
+    doctest.testmod()
